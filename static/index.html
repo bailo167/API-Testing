@@ -3,83 +3,107 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>API Testing</title>
+  <title>Weather & API Testing</title>
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }
     h1 { margin-top: 0; }
-    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; }
     button { padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #d1d5db; background: #f9fafb; cursor: pointer; }
     button:hover { background: #f3f4f6; }
     pre { background: #0b1021; color: #e5e7eb; padding: 1rem; border-radius: 8px; overflow: auto; }
-    input { padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 8px; width: 5rem; }
-    .row { display: flex; gap: 0.5rem; align-items: center; }
+    input, select { padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 8px; }
+    .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
   </style>
 </head>
 <body>
-  <h1>API Testing Frontend</h1>
-  <p>Call your Flask API endpoints below.</p>
+  <h1>API Testing & Weather Dashboard</h1>
+  <p>This page runs entirely in your browser — API keys and data stay local.</p>
 
   <div class="card">
-    <h3>Health</h3>
-    <button onclick="call('/healthz')">GET /healthz</button>
-    <pre id="health"></pre>
-  </div>
-
-  <div class="card">
-    <h3>Ping</h3>
-    <button onclick="call('/api/ping')">GET /api/ping</button>
-    <pre id="ping"></pre>
-  </div>
-
-  <div class="card">
-    <h3>Echo (POST JSON)</h3>
-    <button onclick="echo()">POST /api/echo</button>
-    <pre id="echo"></pre>
-  </div>
-
-  <div class="card">
-    <h3>Calc</h3>
+    <h3>🔑 API Key Setup</h3>
+    <p>Enter your <a href="https://openweathermap.org/api" target="_blank">OpenWeatherMap API key</a> (not saved permanently).</p>
     <div class="row">
-      <label>A <input id="a" type="number" value="5" /></label>
-      <label>B <input id="b" type="number" value="7" /></label>
-      <button onclick="calc()">GET /api/calc</button>
+      <input type="password" id="apiKey" placeholder="Enter API key" style="width: 250px;" />
+      <button onclick="saveKey()">Save Key</button>
+      <button onclick="clearKey()">Clear</button>
     </div>
-    <pre id="calc"></pre>
+    <p id="keyStatus" style="color: gray; margin-top: 0.5rem;">No key saved yet.</p>
   </div>
 
   <div class="card">
-    <h3>External API (uses env vars)</h3>
-    <button onclick="call('/api/external')">GET /api/external</button>
-    <pre id="external"></pre>
+    <h3>🌤️ Weather Search</h3>
+    <div class="row">
+      <input type="text" id="cityInput" placeholder="Enter city name" style="width: 200px;" />
+      <button onclick="getWeather()">Get Weather</button>
+    </div>
+    <pre id="weatherResult">No data yet.</pre>
+  </div>
+
+  <div class="card">
+    <h3>🌍 Quick Select Cities</h3>
+    <div class="row">
+      <select id="citySelect">
+        <option value="">-- choose a city --</option>
+        <option>London</option>
+        <option>New York</option>
+        <option>Tokyo</option>
+        <option>Paris</option>
+        <option>Sydney</option>
+        <option>Toronto</option>
+      </select>
+      <button onclick="selectCity()">Fetch</button>
+    </div>
   </div>
 
   <script>
-    async function call(path) {
-      const res = await fetch(path);
-      const text = await res.text();
-      const id = path.split("/").pop() || "health";
-      document.getElementById(id).textContent = format(text);
+    let API_KEY = sessionStorage.getItem("apiKey") || "";
+
+    function saveKey() {
+      API_KEY = document.getElementById("apiKey").value.trim();
+      if (!API_KEY) return alert("Please enter a valid API key.");
+      sessionStorage.setItem("apiKey", API_KEY);
+      document.getElementById("keyStatus").textContent = "✅ API key stored for this session.";
     }
 
-    async function echo() {
-      const res = await fetch("/api/echo", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ hello: "world", time: new Date().toISOString() })
-      });
-      document.getElementById("echo").textContent = format(await res.text());
+    function clearKey() {
+      sessionStorage.removeItem("apiKey");
+      API_KEY = "";
+      document.getElementById("keyStatus").textContent = "No key saved yet.";
+      alert("API key cleared from session.");
     }
 
-    async function calc() {
-      const a = document.getElementById("a").value;
-      const b = document.getElementById("b").value;
-      const res = await fetch(`/api/calc?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
-      document.getElementById("calc").textContent = format(await res.text());
+    async function getWeather() {
+      const city = document.getElementById("cityInput").value.trim();
+      if (!API_KEY) return alert("Please enter your API key first.");
+      if (!city) return alert("Enter a city name.");
+      await fetchWeather(city);
     }
 
-    function format(text) {
-      try { return JSON.stringify(JSON.parse(text), null, 2); }
-      catch { return text; }
+    async function selectCity() {
+      const city = document.getElementById("citySelect").value;
+      if (!city) return alert("Select a city first.");
+      if (!API_KEY) return alert("Please enter your API key first.");
+      await fetchWeather(city);
+    }
+
+    async function fetchWeather(city) {
+      const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${API_KEY}&units=metric`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const data = await res.json();
+        document.getElementById("weatherResult").textContent = JSON.stringify({
+          city: data.name,
+          country: data.sys.country,
+          weather: data.weather[0].description,
+          temp_c: data.main.temp,
+          feels_like_c: data.main.feels_like,
+          humidity: data.main.humidity,
+          wind_speed: data.wind.speed
+        }, null, 2);
+      } catch (e) {
+        document.getElementById("weatherResult").textContent = `❌ Failed: ${e.message}`;
+      }
     }
   </script>
 </body>
